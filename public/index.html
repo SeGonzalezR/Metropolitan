@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-view="queue">
   <header class="top">
     <div class="brand">
       <img src="icon.svg" alt="" width="28" height="28" />
@@ -41,14 +41,22 @@
       <div class="view-head"><h2>Inscríbete</h2></div>
       <div class="card hint" id="join-hint"></div>
       <form id="join" class="card form" autocomplete="on">
-        <label>Tu nombre o apodo
-          <input name="name" maxlength="30" required placeholder="Ej: Cata" autocomplete="nickname" />
-        </label>
-        <label>Canción
-          <input name="song" maxlength="80" required placeholder="Ej: Persiana americana" />
-        </label>
+        <div class="field">
+          <label for="song-input">Canción</label>
+          <div class="ac">
+            <input id="song-input" name="song" maxlength="80" required autocomplete="off"
+              placeholder="Busca por canción o artista" role="combobox" aria-autocomplete="list"
+              aria-expanded="false" aria-controls="suggest" />
+            <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+          </div>
+          <input type="hidden" name="catalogId" />
+          <p class="field-note" id="song-note"></p>
+        </div>
         <label>Artista <small>(opcional)</small>
           <input name="artist" maxlength="60" placeholder="Ej: Soda Stereo" />
+        </label>
+        <label>Tu nombre o apodo
+          <input name="name" maxlength="30" required placeholder="Ej: Cata" autocomplete="nickname" />
         </label>
         <label>Mesa <small>(opcional)</small>
           <input name="table" maxlength="10" inputmode="numeric" placeholder="Ej: 7" />
@@ -65,6 +73,10 @@
       </div>
       <input type="search" id="song-search" class="search" placeholder="Buscar canción, artista o persona" />
       <ul class="list songs" id="songs"></ul>
+      <div id="catalog-results" hidden>
+        <div class="view-head"><h2>Disponibles en el bar</h2><span class="muted" id="catalog-meta"></span></div>
+        <ul class="list" id="catalog-list"></ul>
+      </div>
     </section>
   </main>
 

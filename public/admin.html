@@ -36,6 +36,12 @@
         <a class="btn" href="/" target="_blank" style="text-align:center;text-decoration:none;color:var(--text)">Ver sitio público</a>
       </div>
 
+      <section class="view card missing-box" id="missing-box" hidden>
+        <div class="view-head"><h2>🔎 Por conseguir</h2><span class="muted" id="missing-meta"></span></div>
+        <p class="muted small">Pedidos que no están en el catálogo de VirtualDJ. Descárgalos y márcalos como listos.</p>
+        <ul class="list" id="missing"></ul>
+      </section>
+
       <section class="view">
         <div class="view-head"><h2>En cola</h2><span class="muted" id="queue-meta"></span></div>
         <ol class="list" id="queue"></ol>
@@ -49,6 +55,19 @@
       <section class="view">
         <div class="view-head"><h2>Ya cantaron</h2></div>
         <ul class="list" id="history"></ul>
+      </section>
+
+      <section class="view card" id="catalog">
+        <div class="view-head"><h2>Catálogo</h2><span class="muted" id="catalog-meta"></span></div>
+        <label class="drop" id="drop">
+          <span>Sube el <strong>database.xml</strong> de VirtualDJ<br />
+            <small>(Documentos › VirtualDJ › database.xml) o una lista .m3u / .txt</small></span>
+          <input type="file" id="catalog-file" accept=".xml,.m3u,.m3u8,.txt,.csv" hidden />
+          <span class="btn small primary" style="justify-self:center">Elegir archivo</span>
+        </label>
+        <label class="check"><input type="checkbox" id="karaoke-only" checked /> Solo pistas de karaoke (ruta o género con «karaoke», .cdg, .kfn)</label>
+        <label class="check"><input type="checkbox" id="merge" /> Agregar al catálogo actual en vez de reemplazarlo</label>
+        <p class="muted small" id="catalog-result"></p>
       </section>
 
       <div class="toolbar">

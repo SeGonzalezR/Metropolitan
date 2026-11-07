@@ -6,10 +6,12 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Catalog } = require('./catalog');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PIN = process.env.ADMIN_PIN || '1234';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
+const CATALOG_FILE = process.env.CATALOG_FILE || path.join(path.dirname(DATA_FILE), 'catalog.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const DEFAULT_SONG_SECONDS = 240; // 4 min si aún no hay historial
@@ -30,6 +32,7 @@ function loadDb() {
 }
 
 let db = loadDb();
+const catalog = new Catalog(CATALOG_FILE);
 let saveTimer = null;
 
 function save() {
@@ -59,9 +62,29 @@ function avgSongSeconds() {
   return Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
 }
 
+// Lo que ve cualquiera (sin token, dispositivo ni ruta del archivo en el PC del DJ)
 function publicEntry(e) {
+  const { token, deviceId, path: _path, ...rest } = e;
+  return rest;
+}
+
+// Lo que ve el KJ (incluye la ruta del archivo para encontrarlo en VirtualDJ)
+function adminEntry(e) {
   const { token, deviceId, ...rest } = e;
   return rest;
+}
+
+// Vincula un pedido con una canción del catálogo (o lo marca para descargar).
+function linkToCatalog(entry, song) {
+  if (song) {
+    entry.catalogId = song.id;
+    entry.path = song.path || '';
+    entry.needsDownload = false;
+  } else {
+    entry.catalogId = null;
+    entry.path = '';
+    entry.needsDownload = true;
+  }
 }
 
 function publicState() {
@@ -79,6 +102,7 @@ function publicState() {
     stats: {
       sungTonight: db.entries.filter((e) => e.status === 'done').length,
     },
+    catalog: { size: catalog.size, updatedAt: catalog.updatedAt },
   };
 }
 
@@ -103,24 +127,31 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req) {
+function readRaw(req, limit) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    const chunks = [];
+    let size = 0;
     req.on('data', (chunk) => {
-      data += chunk;
-      if (data.length > 10_000) {
+      size += chunk.length;
+      if (size > limit) {
         reject(new Error('too large'));
         req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
-    req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch {
-        reject(new Error('bad json'));
-      }
-    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
   });
+}
+
+async function readBody(req) {
+  const data = await readRaw(req, 10_000);
+  try {
+    return data ? JSON.parse(data) : {};
+  } catch {
+    throw new Error('bad json');
+  }
 }
 
 const clean = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -215,6 +246,13 @@ const entryActions = {
     e.startedAt = null;
     e.order = ++db.seq;
   },
+  // el DJ ya la descargó / encontró en VirtualDJ
+  found: (e) => {
+    e.needsDownload = false;
+  },
+  missing: (e) => {
+    e.needsDownload = true;
+  },
   up: (e) => move(e, -1),
   down: (e) => move(e, 1),
   remove: (e) => {
@@ -245,6 +283,12 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  // GET /api/catalog?q=texto
+  if (req.method === 'GET' && parts[1] === 'catalog') {
+    const q = clean(url.searchParams.get('q'), 80);
+    return send(res, 200, { size: catalog.size, results: q ? catalog.search(q, 8) : [] });
+  }
+
   // POST /api/signup
   if (req.method === 'POST' && parts[1] === 'signup') {
     if (!db.signupsOpen) return send(res, 409, { error: 'Las inscripciones están cerradas por ahora.' });
@@ -255,8 +299,15 @@ async function handleApi(req, res, url) {
       return send(res, 400, { error: 'Solicitud inválida.' });
     }
     const name = clean(body.name, 30);
-    const song = clean(body.song, 80);
-    const artist = clean(body.artist, 60);
+    let song = clean(body.song, 80);
+    let artist = clean(body.artist, 60);
+    // Si eligió una sugerencia usamos el título/artista exactos del catálogo;
+    // si la escribió a mano intentamos encontrarla igual.
+    const fromCatalog = (body.catalogId && catalog.get(String(body.catalogId))) || catalog.match(song, artist);
+    if (fromCatalog) {
+      song = fromCatalog.title.slice(0, 80);
+      artist = fromCatalog.artist.slice(0, 60);
+    }
     const table = clean(body.table, 10);
     const deviceId = clean(body.deviceId, 64);
     if (!name || !song) return send(res, 400, { error: 'Necesitamos tu nombre y la canción.' });
@@ -284,6 +335,7 @@ async function handleApi(req, res, url) {
       startedAt: null,
       finishedAt: null,
     };
+    linkToCatalog(entry, fromCatalog);
     db.entries.push(entry);
     broadcast();
     return send(res, 201, { entry: publicEntry(entry), token: entry.token });
@@ -306,11 +358,47 @@ async function handleApi(req, res, url) {
     if (!pinOk(req)) return send(res, 401, { error: 'PIN incorrecto.' });
     if (req.method === 'GET' && parts[2] === 'state') {
       const all = db.entries.slice().sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+      const s = publicState();
+      const full = (e) => e && adminEntry(db.entries.find((x) => x.id === e.id));
       return send(res, 200, {
-        ...publicState(),
-        skipped: all.filter((e) => e.status === 'skipped').map(publicEntry),
+        ...s,
+        nowSinging: full(s.nowSinging),
+        queue: s.queue.map(full),
+        history: s.history.map(full),
+        skipped: all.filter((e) => e.status === 'skipped').map(adminEntry),
       });
     }
+
+    // POST /api/admin/catalog?mode=replace|merge&karaokeOnly=1  (cuerpo: el archivo tal cual)
+    if (parts[2] === 'catalog' && req.method === 'POST') {
+      let text;
+      try {
+        text = await readRaw(req, 200 * 1024 * 1024);
+      } catch {
+        return send(res, 413, { error: 'Archivo demasiado grande (máx. 200 MB).' });
+      }
+      const result = catalog.import(text, {
+        mode: url.searchParams.get('mode') === 'merge' ? 'merge' : 'replace',
+        karaokeOnly: url.searchParams.get('karaokeOnly') === '1',
+      });
+      // revisa si los pedidos pendientes ahora sí están disponibles
+      let resolved = 0;
+      for (const e of db.entries) {
+        if (e.status !== 'queued' && e.status !== 'singing') continue;
+        const found = (e.catalogId && catalog.get(e.catalogId)) || catalog.match(e.song, e.artist);
+        if (!found) continue; // no tocamos lo que el DJ ya marcó a mano
+        if (e.needsDownload) resolved++;
+        linkToCatalog(e, found);
+      }
+      broadcast();
+      return send(res, 200, { ok: true, ...result, resolved });
+    }
+    if (parts[2] === 'catalog' && req.method === 'DELETE') {
+      catalog.clear();
+      broadcast();
+      return send(res, 200, { ok: true });
+    }
+
     if (req.method !== 'POST') return send(res, 405, { error: 'Método no permitido.' });
 
     // POST /api/admin/:action

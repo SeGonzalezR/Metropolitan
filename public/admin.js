@@ -28,14 +28,35 @@ function entryRow(e, i, kind) {
     skipped: [btn('requeue', 'Volver a la cola'), btn('remove', '✕', 'danger')],
     done: [btn('requeue', 'Otra vez')],
   }[kind];
+  const status = e.needsDownload
+    ? ' <span class="tag missing-tag">Por conseguir</span>'
+    : '';
   return `
-    <li class="row">
+    <li class="row ${e.needsDownload && kind === 'queued' ? 'missing' : ''}">
       ${kind === 'queued' ? `<span class="pos">${i + 1}</span>` : ''}
       <div class="row-main">
-        <p class="row-song strong">${esc(e.song)}</p>
+        <p class="row-song strong">${esc(e.song)}${status}</p>
         <p class="muted">${meta}</p>
+        ${e.path ? `<p class="path">${esc(e.path)}</p>` : ''}
       </div>
       <div class="actions">${actions.join('')}</div>
+    </li>`;
+}
+
+function missingRow(e) {
+  const pos = state.queue.findIndex((q) => q.id === e.id);
+  const q = encodeURIComponent(`${e.artist} ${e.song} karaoke`.trim());
+  return `
+    <li class="row missing">
+      <div class="row-main">
+        <p class="row-song strong">${esc(e.song)}</p>
+        <p class="muted">${e.artist ? esc(e.artist) + ' · ' : ''}${esc(e.name)} · ${pos >= 0 ? `puesto #${pos + 1}` : 'cantando'}</p>
+      </div>
+      <div class="actions">
+        <a class="btn small" style="text-decoration:none;color:var(--text)" target="_blank" rel="noopener"
+           href="https://www.youtube.com/results?search_query=${q}">Buscar</a>
+        <button data-id="${esc(e.id)}" data-action="found">✓ Ya la tengo</button>
+      </div>
     </li>`;
 }
 
@@ -56,6 +77,14 @@ function render() {
   const next = state.queue[0];
   $('#next').textContent = next ? `Siguiente: ${next.name} ▶` : s ? 'Terminar canción actual' : 'Cola vacía';
   $('#next').disabled = !next && !s;
+
+  const missing = [state.nowSinging, ...state.queue].filter((e) => e && e.needsDownload);
+  $('#missing-box').hidden = !missing.length;
+  $('#missing-meta').textContent = `${missing.length} pendiente${missing.length === 1 ? '' : 's'}`;
+  $('#missing').innerHTML = missing.map(missingRow).join('');
+  $('#catalog-meta').textContent = state.catalog.size
+    ? `${state.catalog.size.toLocaleString('es-CL')} canciones · ${new Date(state.catalog.updatedAt).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })}`
+    : 'vacío';
 
   $('#toggle').innerHTML = state.signupsOpen ? 'Cerrar inscripciones' : '<span class="pill-closed">● Cerradas</span> · Abrir';
   $('#queue-meta').textContent = `${state.queue.length} en espera`;
@@ -92,6 +121,47 @@ $('#reset').addEventListener('click', () => {
   if (confirm('Esto borra la cola y el historial de la noche. ¿Continuar?')) run(() => api('reset'));
 });
 $('#logout').addEventListener('click', logout);
+
+// ---------- Carga del catálogo ----------
+
+async function uploadCatalog(file) {
+  if (!file) return;
+  const out = $('#catalog-result');
+  out.textContent = `Subiendo ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)…`;
+  const params = new URLSearchParams({
+    mode: $('#merge').checked ? 'merge' : 'replace',
+    karaokeOnly: $('#karaoke-only').checked ? '1' : '0',
+  });
+  try {
+    const r = await fetch(`/api/admin/catalog?${params}`, {
+      method: 'POST',
+      headers: { 'X-Admin-Pin': pin, 'Content-Type': 'text/plain' },
+      body: file,
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || 'Error al importar');
+    out.textContent =
+      `✓ ${body.format}: ${body.read.toLocaleString('es-CL')} archivos leídos → ${body.total.toLocaleString('es-CL')} canciones en el catálogo.` +
+      (body.resolved ? ` ${body.resolved} pedido(s) por conseguir ahora están disponibles.` : '') +
+      (body.total === 0 && $('#karaoke-only').checked ? ' Prueba desmarcando «Solo pistas de karaoke».' : '');
+    await load();
+  } catch (e) {
+    out.textContent = e.message;
+  }
+}
+
+$('#catalog-file').addEventListener('change', (ev) => uploadCatalog(ev.target.files[0]));
+const drop = $('#drop');
+drop.addEventListener('dragover', (ev) => {
+  ev.preventDefault();
+  drop.classList.add('over');
+});
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  drop.classList.remove('over');
+  uploadCatalog(ev.dataTransfer.files[0]);
+});
 
 function logout() {
   pin = '';

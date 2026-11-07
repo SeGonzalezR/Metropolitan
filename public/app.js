@@ -82,6 +82,7 @@ function renderMine() {
           <div class="turn-info">
             <p class="turn-title">${next ? '¡Eres el siguiente!' : `Vas en el puesto #${i + 1}`}</p>
             <p class="turn-song">${esc(e.song)}${e.artist ? ` · ${esc(e.artist)}` : ''}</p>
+            ${e.needsDownload ? '<p class="turn-note">🔎 No estaba en el catálogo: el DJ la está consiguiendo</p>' : ''}
             <p class="turn-eta">${next ? 'Acércate al escenario' : `Te toca en <strong>${fmtWait(wait)}</strong> · aprox. ${fmtClock(now() + wait * 1000)}`}</p>
           </div>
         </div>
@@ -130,7 +131,8 @@ function renderJoinHint() {
     <div class="hint-row">
       <div><span class="num">${n}</span><span class="lbl">${n === 1 ? 'persona' : 'personas'} antes</span></div>
       <div><span class="num">${wait ? fmtWait(wait).replace('~', '') : 'Ya'}</span><span class="lbl">espera estimada</span></div>
-    </div>`;
+    </div>
+    ${state.catalog.size ? `<p class="hint-cat">🎵 Busca entre <strong>${state.catalog.size.toLocaleString('es-CL')}</strong> canciones disponibles en el bar</p>` : ''}`;
 }
 
 function renderSongs() {
@@ -197,6 +199,7 @@ function notify(id, kind, msg) {
 
 function go(view) {
   for (const v of ['queue', 'join', 'songs']) $(`#view-${v}`).hidden = v !== view;
+  document.body.dataset.view = view;
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -226,7 +229,10 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
-$('#song-search').addEventListener('input', renderSongs);
+$('#song-search').addEventListener('input', () => {
+  renderSongs();
+  browseCatalog();
+});
 
 // ---------- Inscripción ----------
 
@@ -250,12 +256,14 @@ form.addEventListener('submit', async (ev) => {
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || 'No se pudo inscribir');
     mine.push({ id: body.entry.id, token: body.token });
+    const missing = body.entry.needsDownload && state && state.catalog.size > 0;
     store.set('karaoke.mine', mine);
     store.set('karaoke.name', data.name);
     store.set('karaoke.table', data.table);
     form.song.value = '';
     form.artist.value = '';
-    toast('¡Listo! Ya estás en la lista 🎶');
+    setPicked(null);
+    toast(missing ? '¡Anotado! El DJ va a buscar tu canción 🔎' : '¡Listo! Ya estás en la lista 🎶');
     go('queue');
   } catch (e) {
     err.textContent = e.message;
@@ -279,3 +287,160 @@ setInterval(() => {
   renderMine();
 }, 1000);
 setInterval(() => !document.hidden && render(), 15000);
+
+// ---------- Catálogo: sugerencias al inscribirse ----------
+
+const songInput = form.song;
+const suggestEl = $('#suggest');
+const noteEl = $('#song-note');
+let suggestions = [];
+let activeIdx = -1;
+let searchSeq = 0;
+let searchTimer;
+
+async function searchCatalog(q, limit) {
+  const r = await fetch(`/api/catalog?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+  const body = await r.json();
+  return (body.results || []).slice(0, limit);
+}
+
+function setPicked(song) {
+  form.catalogId.value = song ? song.id : '';
+  noteEl.className = 'field-note' + (song ? ' ok' : '');
+  noteEl.textContent = song ? '✓ Disponible en el bar' : '';
+}
+
+function closeSuggest() {
+  suggestEl.hidden = true;
+  songInput.setAttribute('aria-expanded', 'false');
+  activeIdx = -1;
+}
+
+function renderSuggest() {
+  if (!suggestions.length) return closeSuggest();
+  suggestEl.innerHTML = suggestions
+    .map(
+      (s, i) => `
+    <li role="option" data-i="${i}" class="${i === activeIdx ? 'active' : ''}" aria-selected="${i === activeIdx}">
+      <span class="sg-title">${esc(s.title)}</span>
+      <span class="sg-artist">${esc(s.artist || 'Artista desconocido')}</span>
+    </li>`
+    )
+    .join('');
+  suggestEl.hidden = false;
+  songInput.setAttribute('aria-expanded', 'true');
+}
+
+function pick(song) {
+  songInput.value = song.title;
+  form.artist.value = song.artist || '';
+  setPicked(song);
+  suggestions = [];
+  closeSuggest();
+}
+
+songInput.addEventListener('input', () => {
+  setPicked(null);
+  const q = songInput.value.trim();
+  clearTimeout(searchTimer);
+  if (!state || !state.catalog.size || q.length < 2) {
+    suggestions = [];
+    return closeSuggest();
+  }
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    try {
+      const results = await searchCatalog(q, 8);
+      if (seq !== searchSeq) return; // llegó una respuesta vieja
+      suggestions = results;
+      activeIdx = -1;
+      renderSuggest();
+      if (!results.length && q.length >= 3) {
+        noteEl.className = 'field-note warn';
+        noteEl.textContent = 'No está en el catálogo del bar. Puedes pedirla igual: el DJ intentará conseguirla.';
+      }
+    } catch {}
+  }, 150);
+});
+
+songInput.addEventListener('keydown', (ev) => {
+  if (suggestEl.hidden) return;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    const n = suggestions.length;
+    activeIdx = (activeIdx + (ev.key === 'ArrowDown' ? 1 : -1) + n) % n;
+    renderSuggest();
+  } else if (ev.key === 'Enter' && activeIdx >= 0) {
+    ev.preventDefault();
+    pick(suggestions[activeIdx]);
+  } else if (ev.key === 'Escape') {
+    closeSuggest();
+  }
+});
+
+// pointerdown + preventDefault: el input no pierde el foco antes de elegir
+suggestEl.addEventListener('pointerdown', (ev) => {
+  const li = ev.target.closest('li[data-i]');
+  if (!li) return;
+  ev.preventDefault();
+  pick(suggestions[Number(li.dataset.i)]);
+});
+songInput.addEventListener('blur', () => setTimeout(closeSuggest, 100));
+
+// En el teléfono el teclado tapa media pantalla: subimos el buscador para que
+// las sugerencias queden a la vista.
+songInput.addEventListener('focus', () => {
+  setTimeout(() => {
+    const top = songInput.getBoundingClientRect().top + window.scrollY - 90;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, 250);
+});
+
+// ---------- Catálogo: explorar desde "Canciones" ----------
+
+let browseTimer;
+let browseSeq = 0;
+let browseResults = [];
+
+function browseCatalog() {
+  const q = $('#song-search').value.trim();
+  const box = $('#catalog-results');
+  clearTimeout(browseTimer);
+  if (!state || !state.catalog.size || q.length < 2) {
+    box.hidden = true;
+    return;
+  }
+  browseTimer = setTimeout(async () => {
+    const seq = ++browseSeq;
+    try {
+      browseResults = await searchCatalog(q, 8);
+    } catch {
+      return;
+    }
+    if (seq !== browseSeq) return;
+    box.hidden = false;
+    $('#catalog-meta').textContent = `${state.catalog.size.toLocaleString('es-CL')} canciones`;
+    $('#catalog-list').innerHTML = browseResults.length
+      ? browseResults
+          .map(
+            (s, i) => `
+        <li class="row">
+          <div class="row-main">
+            <p class="row-song strong">${esc(s.title)}</p>
+            <p class="muted">${esc(s.artist || '')}</p>
+          </div>
+          <button class="btn small primary" data-request="${i}">Pedir</button>
+        </li>`
+          )
+          .join('')
+      : '<li class="empty">No está en el catálogo, pero puedes pedirla igual desde «Inscribirme».</li>';
+  }, 150);
+}
+
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-request]');
+  if (!b) return;
+  pick(browseResults[Number(b.dataset.request)]);
+  go('join');
+  if (!form.name.value) form.name.focus();
+});
