@@ -86,6 +86,13 @@ function render() {
     ? `${state.catalog.size.toLocaleString('es-CL')} canciones · ${new Date(state.catalog.updatedAt).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })}`
     : 'vacío';
 
+  const delayBtn = $('#delay');
+  delayBtn.classList.toggle('delay-on', !!state.delay);
+  delayBtn.textContent = state.delay
+    ? '⏳ Demora avisada · Quitar aviso'
+    : '⏳ Avisar demora (buscando versión / configurando)';
+  delayBtn.hidden = !state.queue.length && !state.nowSinging;
+
   $('#toggle').innerHTML = state.signupsOpen ? 'Cerrar inscripciones' : '<span class="pill-closed">● Cerradas</span> · Abrir';
   $('#queue-meta').textContent = `${state.queue.length} en espera`;
   $('#queue').innerHTML = state.queue.map((e, i) => entryRow(e, i, 'queued')).join('') || '<li class="empty">Sin pedidos.</li>';
@@ -117,6 +124,7 @@ document.addEventListener('click', (ev) => {
 });
 $('#next').addEventListener('click', () => run(() => api('next')));
 $('#toggle').addEventListener('click', () => run(() => api('toggle')));
+$('#delay').addEventListener('click', () => run(() => api('delay')));
 $('#reset').addEventListener('click', () => {
   if (confirm('Esto borra la cola y el historial de la noche. ¿Continuar?')) run(() => api('reset'));
 });

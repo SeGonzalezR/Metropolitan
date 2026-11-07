@@ -21,12 +21,27 @@ const store = {
   },
 };
 
-// "~12 min", "~1 h 05 min", "¡ya!"
-function fmtWait(seconds) {
-  const m = Math.round(seconds / 60);
-  if (m <= 0) return 'en instantes';
-  if (m < 60) return `~${m} min`;
-  return `~${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+// Los tiempos del karaoke nunca son exactos: el DJ puede demorarse buscando la
+// versión correcta o configurando la pista. Por eso mostramos rangos redondeados
+// a 5 minutos y no horas exactas.
+const round5 = (min, fn) => Math.max(5, fn(min / 5) * 5);
+
+// "entre 15 y 25 min", "en unos minutos", "más de 1 hora"
+function fmtRange(seconds) {
+  const m = seconds / 60;
+  if (m < 6) return 'en unos minutos';
+  const low = round5(m * 0.8, Math.floor);
+  const high = Math.max(low + 5, round5(m * 1.2, Math.ceil));
+  if (low >= 60) return 'en más de 1 hora';
+  return `entre ${low} y ${high} min`;
+}
+
+// Versión corta para listas: "≈ 20 min", "pronto"
+function fmtApprox(seconds) {
+  const m = seconds / 60;
+  if (m < 6) return 'pronto';
+  if (m >= 60) return '+1 h';
+  return `≈ ${round5(m, Math.round)} min`;
 }
 
 function fmtClock(ms) {

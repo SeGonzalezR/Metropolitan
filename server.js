@@ -15,7 +15,12 @@ const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json
 const CATALOG_FILE = process.env.CATALOG_FILE || path.join(path.dirname(DATA_FILE), 'catalog.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-const DEFAULT_SONG_SECONDS = 240; // 4 min si aún no hay historial
+// Un "turno" va desde que empieza un cantante hasta que empieza el siguiente:
+// incluye la canción y lo que tarda el DJ en llamar, buscar la versión y
+// configurar la pista. Hasta tener historial suponemos 5 min (4 + 1 de cambio).
+const DEFAULT_TURN_SECONDS = 300;
+// Mientras el DJ avisa una demora, sumamos este margen a todas las esperas.
+const DELAY_EXTRA_SECONDS = 180;
 const MAX_ACTIVE_PER_DEVICE = 2; // inscripciones pendientes por teléfono
 
 // ---------- Persistencia ----------
@@ -53,15 +58,23 @@ const byOrder = (a, b) => a.order - b.order;
 const queued = () => db.entries.filter((e) => e.status === 'queued').sort(byOrder);
 const singing = () => db.entries.find((e) => e.status === 'singing') || null;
 
-function avgSongSeconds() {
-  const recent = db.entries
-    .filter((e) => e.status === 'done' && e.startedAt && e.finishedAt)
-    .sort((a, b) => b.finishedAt - a.finishedAt)
-    .slice(0, 10)
-    .map((e) => (e.finishedAt - e.startedAt) / 1000)
-    .filter((s) => s >= 60 && s <= 600); // descarta clics accidentales
-  if (!recent.length) return DEFAULT_SONG_SECONDS;
-  return Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
+function avgTurnSeconds() {
+  const starts = db.entries
+    .filter((e) => (e.status === 'done' || e.status === 'singing') && e.startedAt)
+    .map((e) => e.startedAt)
+    .sort((a, b) => a - b)
+    .slice(-11);
+  const gaps = [];
+  for (let i = 1; i < starts.length; i++) {
+    const g = (starts[i] - starts[i - 1]) / 1000;
+    // descarta clics accidentales (muy cortos) y pausas largas (DJ en break)
+    if (g >= 60 && g <= 900) gaps.push(g);
+  }
+  if (!gaps.length) return DEFAULT_TURN_SECONDS;
+  // mezcla con el valor por defecto mientras hay pocos datos, para no saltar
+  const weight = Math.min(gaps.length, 5) / 5;
+  const avg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  return Math.round(avg * weight + DEFAULT_TURN_SECONDS * (1 - weight));
 }
 
 // Lo que ve cualquiera (sin token, dispositivo ni ruta del archivo en el PC del DJ)
@@ -97,7 +110,8 @@ function publicState() {
   return {
     serverTime: Date.now(),
     signupsOpen: db.signupsOpen,
-    avgSongSeconds: avgSongSeconds(),
+    turnSeconds: avgTurnSeconds(),
+    delay: db.delay ? { since: db.delay.since, extraSeconds: DELAY_EXTRA_SECONDS } : null,
     nowSinging: singing() && publicEntry(singing()),
     queue: queued().map(publicEntry),
     history: history.map(publicEntry),
@@ -197,6 +211,7 @@ function pinOk(req) {
 // ---------- Acciones de administración ----------
 
 function startNext() {
+  db.delay = null; // empezó un turno nuevo: la demora avisada ya pasó
   const current = singing();
   if (current) {
     current.status = 'done';
@@ -222,6 +237,10 @@ const adminActions = {
   toggle: () => {
     db.signupsOpen = !db.signupsOpen;
   },
+  // "Avisar demora": el DJ está buscando la versión o configurando la pista
+  delay: () => {
+    db.delay = db.delay ? null : { since: Date.now() };
+  },
   reset: () => {
     db = { ...emptyDb(), signupsOpen: db.signupsOpen };
   },
@@ -229,6 +248,7 @@ const adminActions = {
 
 const entryActions = {
   sing: (e) => {
+    db.delay = null;
     const current = singing();
     if (current) {
       // el que estaba cantando vuelve al primer lugar de la cola

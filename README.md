@@ -14,13 +14,24 @@ Mini portal mobile para el karaoke del bar. Los clientes escanean un QR y desde 
 
 Todo se actualiza en tiempo real (Server-Sent Events), sin recargar la página.
 
-La espera se calcula con la duración promedio real de las últimas canciones de la noche (4 min por defecto hasta que haya historial).
+### Tiempos siempre aproximados
+
+En un karaoke los tiempos nunca son exactos: el DJ puede demorarse llamando a la persona, buscando la versión correcta o configurando la pista. Por eso:
+
+- Las esperas se muestran como **rangos redondeados a 5 minutos** («entre 15 y 25 min», «≈ 20 min» en la lista) y nunca como una hora exacta.
+- La estimación usa la **duración real de cada turno** (desde que empieza un cantante hasta que empieza el siguiente), es decir, canción + tiempo de cambio del DJ. Parte en 5 min por turno y se va ajustando con lo que pasa en la noche; descarta pausas largas.
+- El cliente recibe avisos por etapas (con vibración):
+  1. **«Prepárate, ya casi»** cuando quedan 2 personas o menos antes que él: quédate cerca del escenario.
+  2. **«¡Eres el siguiente!»**: el DJ te llamará en cualquier momento, acércate y ten tu canción lista.
+  3. **«¡Te toca!»**: el DJ te está llamando al escenario.
+- Si el DJ se va a demorar, toca **«⏳ Avisar demora»** en el panel: todos ven un aviso de que la lista puede atrasarse y las esperas suben unos minutos. El aviso se quita solo al pasar al siguiente cantante.
 
 ## Panel del KJ
 
 En `/admin` (protegido con PIN) quien maneja el karaoke puede:
 
 - Pasar al **siguiente cantante** con un botón grande.
+- **Avisar demora** a la sala cuando esté buscando la versión o configurando la pista.
 - Subir/bajar pedidos, poner a alguien **ahora**, **saltar** (y devolver a la cola) o eliminar.
 - **Abrir/cerrar inscripciones**.
 - Ver la sección **🔎 Por conseguir** con los pedidos que no están en el catálogo (botón para buscarlos en YouTube y «✓ Ya la tengo»).

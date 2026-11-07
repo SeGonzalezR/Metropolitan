@@ -354,3 +354,15 @@ body.admin { padding-bottom: 32px; }
 
 body[data-page='menu'] #now,
 body[data-page='menu'] #review-prompt { display: none; }
+
+/* ---------- Tiempos aproximados y avisos ---------- */
+.turn.soon { border-color: var(--accent); border-left-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); }
+.turn.soon .turn-pos .num { color: var(--accent); }
+.turn-fine { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--muted); }
+.turn-delay, .delay-banner {
+  font-size: 0.82rem; color: var(--warn); background: var(--warn-soft);
+  border: 1px solid var(--warn); border-radius: 8px; padding: 8px 10px;
+}
+.turn-delay { margin-top: 12px; }
+.hint-fine { margin-top: 10px; font-size: 0.75rem; color: var(--muted); text-align: center; }
+.btn.delay-on { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }

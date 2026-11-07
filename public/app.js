@@ -8,24 +8,32 @@ if (!deviceId) {
   deviceId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
   store.set('karaoke.device', deviceId);
 }
-let lastAlert = store.get('karaoke.alert', {}); // { [id]: 'next' | 'singing' }
+let lastAlert = store.get('karaoke.alert', {}); // { [id]: 'soon' | 'next' | 'singing' }
 
 const now = () => Date.now() + clockOffset;
 const isMine = (id) => mine.some((m) => m.id === id);
 
 // ---------- Cálculo de espera ----------
 
+// Cuántas personas antes que tú activan el aviso "prepárate".
+const SOON_AHEAD = 2;
+
+// Lo que falta para que termine el turno en curso (canción + cambio de pista).
 function remainingCurrent() {
-  if (!state.nowSinging) return 0;
+  const turn = state.turnSeconds;
+  const extra = state.delay ? state.delay.extraSeconds : 0;
+  if (!state.nowSinging) return state.queue.length ? 60 + extra : 0; // el DJ está preparando al siguiente
   const elapsed = (now() - state.nowSinging.startedAt) / 1000;
-  // si la canción se alarga, asumimos que queda al menos ~30 s
-  return Math.max(30, state.avgSongSeconds - elapsed);
+  // si el turno se alarga, asumimos que todavía queda al menos 1 minuto
+  return Math.max(60, turn - elapsed) + extra;
 }
 
 // segundos estimados hasta que le toque a la persona en la posición `i` (0 = siguiente)
 function waitFor(i) {
-  return remainingCurrent() + i * state.avgSongSeconds;
+  return remainingCurrent() + i * state.turnSeconds;
 }
+
+const DELAY_NOTE = '⏳ El DJ está preparando la pista (buscando la versión o configurando). La lista puede atrasarse unos minutos.';
 
 // ---------- Render ----------
 
@@ -40,7 +48,7 @@ function renderNow() {
     return;
   }
   const elapsed = (now() - s.startedAt) / 1000;
-  const pct = Math.min(100, (elapsed / state.avgSongSeconds) * 100);
+  const pct = Math.min(100, (elapsed / state.turnSeconds) * 100);
   el.innerHTML = `
     <p class="eyebrow"><span class="eq"><i></i><i></i><i></i></span> Cantando ahora</p>
     <p class="now-song">${esc(s.song)}</p>
@@ -60,32 +68,46 @@ function renderMine() {
     if (state.nowSinging && state.nowSinging.id === m.id) {
       cards.push(`
         <div class="turn singing">
-          <p class="turn-big">¡Es tu turno! 🎤</p>
-          <p>Sube al escenario: <strong>${esc(state.nowSinging.song)}</strong></p>
+          <p class="turn-big">¡Te toca! 🎤</p>
+          <p>El DJ te está llamando al escenario para cantar <strong>${esc(state.nowSinging.song)}</strong></p>
         </div>`);
-      notify(m.id, 'singing', '¡Es tu turno! Sube al escenario 🎤');
+      notify(m.id, 'singing', '¡Te toca! El DJ te está llamando 🎤');
       continue;
     }
     const i = state.queue.findIndex((q) => q.id === m.id);
     if (i === -1) continue;
     const e = state.queue[i];
     const wait = waitFor(i);
-    const next = i === 0;
-    if (next) notify(m.id, 'next', '¡Eres el siguiente! Acércate al escenario');
+    const stage = i === 0 ? 'next' : i <= SOON_AHEAD ? 'soon' : 'wait';
+    if (stage === 'next') notify(m.id, 'next', '¡Eres el siguiente! El DJ te llamará pronto');
+    else if (stage === 'soon') notify(m.id, 'soon', 'Prepárate: ya casi es tu turno');
+
+    const title = {
+      next: '¡Eres el siguiente!',
+      soon: 'Prepárate, ya casi',
+      wait: `Vas en el puesto #${i + 1}`,
+    }[stage];
+    const eta = {
+      next: 'El DJ te llamará en cualquier momento. <strong>Acércate al escenario</strong> y ten tu canción lista.',
+      soon: `Te toca <strong>${fmtRange(wait)}</strong>, aprox. Quédate cerca del escenario: el DJ te llamará pronto.`,
+      wait: `Te toca <strong>${fmtRange(wait)}</strong>, aprox.`,
+    }[stage];
     cards.push(`
-      <div class="turn ${next ? 'next' : ''}">
+      <div class="turn ${stage}">
         <div class="turn-row">
           <div class="turn-pos">
             <span class="num">${i}</span>
             <span class="lbl">${i === 1 ? 'persona<br>antes' : 'personas<br>antes'}</span>
           </div>
           <div class="turn-info">
-            <p class="turn-title">${next ? '¡Eres el siguiente!' : `Vas en el puesto #${i + 1}`}</p>
+            <p class="turn-title">${title}</p>
             <p class="turn-song">${esc(e.song)}${e.artist ? ` · ${esc(e.artist)}` : ''}</p>
             ${e.needsDownload ? '<p class="turn-note">🔎 No estaba en el catálogo: el DJ la está consiguiendo</p>' : ''}
-            <p class="turn-eta">${next ? 'Acércate al escenario' : `Te toca en <strong>${fmtWait(wait)}</strong> · aprox. ${fmtClock(now() + wait * 1000)}`}</p>
+            <p class="turn-eta">${eta}</p>
           </div>
         </div>
+        ${state.delay ? `<p class="turn-delay">${DELAY_NOTE}</p>` : ''}
+        ${stage === 'wait' && !state.delay ? '<p class="turn-fine">El tiempo es aproximado: depende de cada canción y de lo que tarde el DJ en prepararla. Te avisaremos cuando falte poco.</p>' : ''}
         <button class="link" data-cancel="${esc(m.id)}">Cancelar</button>
       </div>`);
   }
@@ -97,8 +119,11 @@ function renderMine() {
 function renderQueue() {
   const q = state.queue;
   $('#queue-meta').textContent = q.length
-    ? `${q.length} en espera · ~${Math.round(state.avgSongSeconds / 60)} min por canción`
+    ? `${q.length} en espera · ≈ ${Math.round(state.turnSeconds / 60)} min por turno`
     : '';
+  const delayEl = $('#queue-delay');
+  delayEl.hidden = !state.delay || !q.length;
+  delayEl.textContent = DELAY_NOTE;
   $('#queue').innerHTML = q.length
     ? q
         .map(
@@ -109,7 +134,7 @@ function renderQueue() {
           <p class="row-name">${esc(e.name)}${isMine(e.id) ? ' <span class="tag you">Tú</span>' : ''}</p>
           <p class="row-song">${esc(e.song)}${e.artist ? ` <span class="muted">· ${esc(e.artist)}</span>` : ''}</p>
         </div>
-        <span class="eta">${i === 0 ? 'Sigue' : fmtWait(waitFor(i))}</span>
+        <span class="eta">${i === 0 ? 'Sigue' : fmtApprox(waitFor(i))}</span>
       </li>`
         )
         .join('')
@@ -127,11 +152,13 @@ function renderJoinHint() {
   }
   form.hidden = false;
   const wait = n === 0 && !state.nowSinging ? 0 : waitFor(n);
+  const approx = !wait ? 'Ya' : fmtApprox(wait) === 'pronto' ? 'Pronto' : fmtApprox(wait).replace('≈ ', '≈');
   el.innerHTML = `
     <div class="hint-row">
       <div><span class="num">${n}</span><span class="lbl">${n === 1 ? 'persona' : 'personas'} antes</span></div>
-      <div><span class="num">${wait ? fmtWait(wait).replace('~', '') : 'Ya'}</span><span class="lbl">espera estimada</span></div>
+      <div><span class="num">${approx}</span><span class="lbl">espera aproximada</span></div>
     </div>
+    <p class="hint-fine">Es una estimación: puede variar según cada canción y la preparación del DJ.</p>
     ${state.catalog.size ? `<p class="hint-cat">🎵 Busca entre <strong>${state.catalog.size.toLocaleString('es-CL')}</strong> canciones disponibles en el bar</p>` : ''}`;
 }
 
