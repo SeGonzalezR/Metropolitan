@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0a14" />
+  <title>Metropolitan Karaoke</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="28" height="28" />
+      <div>
+        <strong>Metropolitan</strong>
+        <span>Karaoke</span>
+      </div>
+    </div>
+    <div class="live" id="live"><i></i><span>En vivo</span></div>
+  </header>
+
+  <main>
+    <!-- Estado personal: lo más importante para quien espera -->
+    <section id="mine" class="mine" hidden></section>
+
+    <!-- Ahora cantando -->
+    <section class="now card" id="now"></section>
+
+    <!-- Vistas -->
+    <section class="view" id="view-queue">
+      <div class="view-head">
+        <h2>Próximos</h2>
+        <span class="muted" id="queue-meta"></span>
+      </div>
+      <ol class="list" id="queue"></ol>
+    </section>
+
+    <section class="view" id="view-join" hidden>
+      <div class="view-head"><h2>Inscríbete</h2></div>
+      <div class="card hint" id="join-hint"></div>
+      <form id="join" class="card form" autocomplete="on">
+        <label>Tu nombre o apodo
+          <input name="name" maxlength="30" required placeholder="Ej: Cata" autocomplete="nickname" />
+        </label>
+        <label>Canción
+          <input name="song" maxlength="80" required placeholder="Ej: Persiana americana" />
+        </label>
+        <label>Artista <small>(opcional)</small>
+          <input name="artist" maxlength="60" placeholder="Ej: Soda Stereo" />
+        </label>
+        <label>Mesa <small>(opcional)</small>
+          <input name="table" maxlength="10" inputmode="numeric" placeholder="Ej: 7" />
+        </label>
+        <p class="error" id="join-error" role="alert"></p>
+        <button type="submit" class="btn primary">Anotarme en la lista</button>
+      </form>
+    </section>
+
+    <section class="view" id="view-songs" hidden>
+      <div class="view-head">
+        <h2>Canciones de la noche</h2>
+        <span class="muted" id="songs-meta"></span>
+      </div>
+      <input type="search" id="song-search" class="search" placeholder="Buscar canción, artista o persona" />
+      <ul class="list songs" id="songs"></ul>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Secciones">
+    <button data-view="queue" class="active"><span class="ico">☰</span>Lista</button>
+    <button data-view="join" class="join-tab"><span class="ico">＋</span>Inscribirme</button>
+    <button data-view="songs"><span class="ico">♪</span>Canciones</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="common.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

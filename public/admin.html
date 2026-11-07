@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0a14" />
+  <meta name="robots" content="noindex" />
+  <title>Panel KJ · Metropolitan</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="admin" style="padding-bottom: 32px">
+  <header class="top">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="28" height="28" />
+      <div><strong>Panel KJ</strong><span>Metropolitan</span></div>
+    </div>
+    <div class="live" id="live"><i></i><span>En vivo</span></div>
+  </header>
+
+  <main>
+    <form id="login" class="card form">
+      <label>PIN del KJ
+        <input name="pin" type="password" inputmode="numeric" required autocomplete="current-password" />
+      </label>
+      <p class="error" id="login-error"></p>
+      <button class="btn primary">Entrar</button>
+    </form>
+
+    <div id="panel" hidden style="display: grid; gap: 16px">
+      <section class="now card" id="now"></section>
+      <button class="btn primary big-next" id="next">Siguiente cantante ▶</button>
+
+      <div class="toolbar">
+        <button class="btn" id="toggle"></button>
+        <a class="btn" href="/" target="_blank" style="text-align:center;text-decoration:none;color:var(--text)">Ver sitio público</a>
+      </div>
+
+      <section class="view">
+        <div class="view-head"><h2>En cola</h2><span class="muted" id="queue-meta"></span></div>
+        <ol class="list" id="queue"></ol>
+      </section>
+
+      <section class="view">
+        <div class="view-head"><h2>Saltados</h2></div>
+        <ul class="list" id="skipped"></ul>
+      </section>
+
+      <section class="view">
+        <div class="view-head"><h2>Ya cantaron</h2></div>
+        <ul class="list" id="history"></ul>
+      </section>
+
+      <div class="toolbar">
+        <button class="btn" id="reset" style="color:#ff7a9c">Reiniciar noche (borra todo)</button>
+        <button class="btn" id="logout">Salir</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" style="bottom: 24px"></div>
+
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
