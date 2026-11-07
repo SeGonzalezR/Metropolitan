@@ -82,3 +82,23 @@ function connectLive(onState) {
   });
   return { refresh: poll, close: () => (es && es.close(), clearInterval(pollTimer)) };
 }
+
+// ---------- Tema claro / oscuro ----------
+(function initTheme() {
+  const btn = document.getElementById('theme-toggle');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const apply = (t) => {
+    document.documentElement.dataset.theme = t;
+    if (meta) meta.content = t === 'light' ? '#f5f0e6' : '#131010';
+    if (btn) btn.setAttribute('aria-label', t === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+  };
+  apply(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+  if (btn)
+    btn.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+      apply(next);
+      try {
+        localStorage.setItem('karaoke.theme', next); // texto plano: lo lee el script del <head>
+      } catch {}
+    });
+})();

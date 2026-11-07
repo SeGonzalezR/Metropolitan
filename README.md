@@ -48,6 +48,18 @@ Por defecto solo se importan **pistas de karaoke** (ruta o género que contenga 
 
 Si un archivo no tiene tags, el título y artista se sacan del nombre (`SC8123-05 - Maná - Corazón Espinado.cdg` → *Maná – Corazón Espinado*).
 
+## Diseño y colores
+
+Estilo clásico de bar: tipografía serif (Playfair Display) para títulos, acento bronce y burdeo. **Modo oscuro por defecto**, con un botón ☾/☀ en el encabezado para cambiar a modo claro; la elección queda guardada en cada teléfono.
+
+Para usar los colores del bar, edita las variables al inicio de `public/styles.css`:
+
+- `--accent`: color principal (botones, números destacados) y `--accent-ink` para el texto encima.
+- `--accent-2`: color secundario (tu turno, etiqueta «Tú») y `--accent-2-ink`.
+- El bloque `:root` es el modo oscuro y `[data-theme='light']` el modo claro.
+
+El logo está en `public/icon.svg` (se puede reemplazar por el del bar).
+
 ## Cómo correrlo
 
 Requiere Node.js 18+ y no tiene dependencias.

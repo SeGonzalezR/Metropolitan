@@ -53,7 +53,7 @@ function missingRow(e) {
         <p class="muted">${e.artist ? esc(e.artist) + ' · ' : ''}${esc(e.name)} · ${pos >= 0 ? `puesto #${pos + 1}` : 'cantando'}</p>
       </div>
       <div class="actions">
-        <a class="btn small" style="text-decoration:none;color:var(--text)" target="_blank" rel="noopener"
+        <a class="btn small" target="_blank" rel="noopener"
            href="https://www.youtube.com/results?search_query=${q}">Buscar</a>
         <button data-id="${esc(e.id)}" data-action="found">✓ Ya la tengo</button>
       </div>
@@ -68,7 +68,7 @@ function render() {
        <p class="now-artist">${esc(s.artist || '')}</p>
        <p class="now-singer">${esc(s.name)}${s.table ? ` <span class="tag">Mesa ${esc(s.table)}</span>` : ''}</p>
        <p class="muted small" id="elapsed"></p>
-       <div class="actions" style="margin-top:10px">
+       <div class="actions actions-gap">
          <button data-id="${esc(s.id)}" data-action="done">Terminó</button>
          <button data-id="${esc(s.id)}" data-action="requeue">Devolver a la cola</button>
        </div>`
