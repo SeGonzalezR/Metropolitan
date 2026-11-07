@@ -102,3 +102,13 @@ function connectLive(onState) {
       } catch {}
     });
 })();
+
+// Altura real del encabezado (para pegar barras justo debajo).
+(function trackHeader() {
+  const header = document.querySelector('.top');
+  if (!header) return;
+  const set = () => document.documentElement.style.setProperty('--header-h', `${header.offsetHeight}px`);
+  set();
+  if ('ResizeObserver' in window) new ResizeObserver(set).observe(header);
+  else window.addEventListener('resize', set);
+})();

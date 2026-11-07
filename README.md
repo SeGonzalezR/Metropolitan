@@ -8,6 +8,8 @@ Mini portal mobile para el karaoke del bar. Los clientes escanean un QR y desde 
 - **Seguir su propio turno**: una tarjeta fija arriba muestra cuántas personas tienen antes, la espera estimada y la hora aproximada. Cuando son los siguientes o les toca, el teléfono vibra y aparece un aviso.
 - **Ver todas las canciones de la noche** (sonando, por venir y ya cantadas) con buscador.
 - **Cancelar** su inscripción si se tienen que ir.
+- **Ver la carta** del local con precios, descripciones y lo que está agotado, con accesos rápidos por categoría.
+- **Dejar una reseña en Google** con un botón que abre directo la página de reseñas del local. Justo después de cantar se le invita una vez («¡Bien cantado!»); si toca «Ahora no» no se le vuelve a preguntar esa noche, y si ya fue a dejarla no se insiste por 60 días. La invitación es igual para todos: Google no permite pedir reseñas solo a quienes quedaron contentos.
 - **Buscar en el catálogo del bar** mientras escriben la canción (sugerencias al instante, sin importar tildes) o explorarlo desde la pestaña *Canciones* con un botón «Pedir». Si la canción no está, igual pueden pedirla: queda marcada para que el DJ la consiga y el cliente ve el aviso «el DJ la está consiguiendo».
 
 Todo se actualiza en tiempo real (Server-Sent Events), sin recargar la página.
@@ -24,6 +26,7 @@ En `/admin` (protegido con PIN) quien maneja el karaoke puede:
 - Ver la sección **🔎 Por conseguir** con los pedidos que no están en el catálogo (botón para buscarlos en YouTube y «✓ Ya la tengo»).
 - Ver la **ruta del archivo** en el PC de cada pedido que sí está en el catálogo, para encontrarlo rápido en VirtualDJ.
 - **Cargar el catálogo** subiendo el archivo de VirtualDJ.
+- Editar la **carta y el enlace de reseñas** (sección *Carta y reseñas*): categorías, productos, precios, descripciones y botón **Marcar agotado** para lo que se acabe durante la noche. Los cambios aparecen al instante en los teléfonos.
 - Reiniciar la noche.
 
 ## Catálogo de VirtualDJ
@@ -47,6 +50,12 @@ Hay dos formas de cargarlo:
 Por defecto solo se importan **pistas de karaoke** (ruta o género que contenga «karaoke», o archivos `.cdg`/`.kfn`), para no sugerir canciones de la biblioteca de música normal. Se puede desactivar con la casilla del panel o con `--all` en el script.
 
 Si un archivo no tiene tags, el título y artista se sacan del nombre (`SC8123-05 - Maná - Corazón Espinado.cdg` → *Maná – Corazón Espinado*).
+
+## Carta y reseñas
+
+El portal parte con una **carta de ejemplo** (marcada como tal) para que no se vea vacío; edítala en `/admin` › *Carta y reseñas* y guárdala antes de abrir. Se guarda en `data/info.json`.
+
+Para el **enlace de reseñas**, en el Perfil de Empresa de Google del local entra a *Pedir reseñas* y copia el enlace (del tipo `https://g.page/r/…/review`). También sirve `https://search.google.com/local/writereview?placeid=TU_PLACE_ID`. Si el campo queda vacío, el botón de reseñas no se muestra.
 
 ## Diseño y colores
 
@@ -78,6 +87,7 @@ Variables de entorno:
 | `ADMIN_PIN` | `1234`          | PIN del panel KJ (**cámbialo**)      |
 | `DATA_FILE` | `data/db.json`  | Archivo donde se guarda la cola      |
 | `CATALOG_FILE` | `data/catalog.json` | Archivo donde se guarda el catálogo |
+| `INFO_FILE` | `data/info.json` | Archivo donde se guardan la carta y el enlace de reseñas |
 
 Los datos se guardan en un archivo JSON, así que la cola sobrevive a reinicios del servidor. Sirve en cualquier hosting con Node (Railway, Render, Fly.io, un VPS o un PC del bar en la red local). Para el uso en el local, imprime un QR que apunte a la URL pública.
 

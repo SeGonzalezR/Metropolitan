@@ -174,6 +174,7 @@ function logout() {
 
 async function start() {
   await load();
+  loadInfoEditor().catch(() => {});
   $('#login').hidden = true;
   $('#panel').hidden = false;
   // cualquier cambio (p. ej. una inscripción nueva) recarga la vista completa del KJ
@@ -190,6 +191,153 @@ $('#login').addEventListener('submit', async (ev) => {
   } catch (e) {
     $('#login-error').textContent = e.message;
   }
+});
+
+
+// ---------- Carta y reseñas ----------
+
+let draft = null; // copia editable { reviewUrl, menu: { note, categories } }
+let dirty = false;
+let savedExample = false;
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+async function loadInfoEditor(force = false) {
+  if (dirty && !force) return; // no pisar cambios sin guardar
+  const r = await fetch('/api/info', { cache: 'no-store' });
+  const data = await r.json();
+  savedExample = data.example;
+  draft = { reviewUrl: data.reviewUrl, menu: JSON.parse(JSON.stringify(data.menu)) };
+  setDirty(false);
+  renderEditor();
+}
+
+function setDirty(v) {
+  dirty = v;
+  $('#dirty').textContent = v ? 'Cambios sin guardar' : '';
+  $('#info-status').textContent = savedExample
+    ? '⚠ carta de ejemplo: edítala'
+    : `${draft.menu.categories.reduce((n, c) => n + c.items.length, 0)} productos${draft.reviewUrl ? ' · reseñas ✓' : ''}`;
+}
+
+function renderEditor() {
+  $('#review-url').value = draft.reviewUrl || '';
+  $('#menu-note').value = draft.menu.note || '';
+  $('#menu-editor').innerHTML = draft.menu.categories
+    .map(
+      (c, ci) => `
+    <fieldset class="ed-cat">
+      <div class="ed-cat-head">
+        <input class="ed-cat-name" data-ci="${ci}" data-f="name" value="${esc(c.name)}" aria-label="Nombre de la categoría" />
+        <div class="actions">
+          <button type="button" data-ed="cat-up" data-ci="${ci}" aria-label="Subir categoría">▲</button>
+          <button type="button" data-ed="cat-down" data-ci="${ci}" aria-label="Bajar categoría">▼</button>
+          <button type="button" class="danger" data-ed="cat-del" data-ci="${ci}" aria-label="Eliminar categoría">✕</button>
+        </div>
+      </div>
+      ${c.items
+        .map(
+          (it, ii) => `
+        <div class="ed-item ${it.available ? '' : 'off'}">
+          <div class="ed-row">
+            <input data-ci="${ci}" data-ii="${ii}" data-f="name" value="${esc(it.name)}" placeholder="Producto" aria-label="Producto" />
+            <input class="ed-price" data-ci="${ci}" data-ii="${ii}" data-f="price" value="${it.price ?? ''}" inputmode="numeric" placeholder="$" aria-label="Precio" />
+          </div>
+          <input data-ci="${ci}" data-ii="${ii}" data-f="desc" value="${esc(it.desc)}" placeholder="Descripción (opcional)" aria-label="Descripción" />
+          <div class="actions">
+            <button type="button" data-ed="toggle" data-ci="${ci}" data-ii="${ii}">${it.available ? 'Marcar agotado' : '✓ Hay de nuevo'}</button>
+            <button type="button" data-ed="item-up" data-ci="${ci}" data-ii="${ii}" aria-label="Subir">▲</button>
+            <button type="button" data-ed="item-down" data-ci="${ci}" data-ii="${ii}" aria-label="Bajar">▼</button>
+            <button type="button" class="danger" data-ed="item-del" data-ci="${ci}" data-ii="${ii}" aria-label="Eliminar producto">✕</button>
+          </div>
+        </div>`
+        )
+        .join('')}
+      <button type="button" class="btn small" data-ed="item-add" data-ci="${ci}">＋ Producto</button>
+    </fieldset>`
+    )
+    .join('');
+}
+
+const swap = (arr, i, j) => {
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+};
+
+$('#info-editor').addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!draft) return;
+  if (t.id === 'review-url') draft.reviewUrl = t.value;
+  else if (t.id === 'menu-note') draft.menu.note = t.value;
+  else if (t.dataset.f) {
+    const cat = draft.menu.categories[Number(t.dataset.ci)];
+    if (t.dataset.ii === undefined) cat[t.dataset.f] = t.value;
+    else cat.items[Number(t.dataset.ii)][t.dataset.f] = t.value;
+  } else return;
+  setDirty(true);
+});
+
+$('#info-editor').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-ed]');
+  if (!b) return;
+  const cats = draft.menu.categories;
+  const ci = Number(b.dataset.ci);
+  const ii = Number(b.dataset.ii);
+  const items = cats[ci] && cats[ci].items;
+  switch (b.dataset.ed) {
+    case 'cat-up': swap(cats, ci, ci - 1); break;
+    case 'cat-down': swap(cats, ci, ci + 1); break;
+    case 'cat-del':
+      if (!confirm(`¿Eliminar la categoría «${cats[ci].name}» y sus productos?`)) return;
+      cats.splice(ci, 1);
+      break;
+    case 'item-add': items.push({ id: uid(), name: '', desc: '', price: null, available: true }); break;
+    case 'item-up': swap(items, ii, ii - 1); break;
+    case 'item-down': swap(items, ii, ii + 1); break;
+    case 'item-del': items.splice(ii, 1); break;
+    case 'toggle': items[ii].available = !items[ii].available; break;
+  }
+  setDirty(true);
+  renderEditor();
+  if (b.dataset.ed === 'item-add') {
+    const inputs = document.querySelectorAll(`[data-ci="${ci}"][data-f="name"][data-ii]`);
+    inputs[inputs.length - 1].focus();
+  }
+});
+
+$('#add-cat').addEventListener('click', () => {
+  draft.menu.categories.push({ id: uid(), name: 'Nueva categoría', items: [] });
+  setDirty(true);
+  renderEditor();
+  const names = document.querySelectorAll('.ed-cat-name');
+  names[names.length - 1].select();
+});
+
+$('#save-info').addEventListener('click', async () => {
+  const btn = $('#save-info');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin/info', {
+      method: 'PUT',
+      headers: { 'X-Admin-Pin': pin, 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || 'No se pudo guardar');
+    savedExample = false;
+    draft = { reviewUrl: body.reviewUrl, menu: body.menu };
+    setDirty(false);
+    renderEditor();
+    toast('Carta guardada ✓ (ya se ve en los teléfonos)');
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+window.addEventListener('beforeunload', (ev) => {
+  if (dirty) ev.preventDefault();
 });
 
 if (pin) start().catch(() => logout());

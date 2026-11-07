@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Catalog } = require('./catalog');
+const { Info } = require('./info');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PIN = process.env.ADMIN_PIN || '1234';
@@ -33,6 +34,7 @@ function loadDb() {
 
 let db = loadDb();
 const catalog = new Catalog(CATALOG_FILE);
+const info = new Info(process.env.INFO_FILE || path.join(path.dirname(DATA_FILE), 'info.json'));
 let saveTimer = null;
 
 function save() {
@@ -103,6 +105,7 @@ function publicState() {
       sungTonight: db.entries.filter((e) => e.status === 'done').length,
     },
     catalog: { size: catalog.size, updatedAt: catalog.updatedAt },
+    infoVersion: info.version, // el teléfono vuelve a pedir la carta cuando cambia
   };
 }
 
@@ -283,6 +286,9 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  // GET /api/info  (carta + enlace de reseñas)
+  if (req.method === 'GET' && parts[1] === 'info') return send(res, 200, info.public());
+
   // GET /api/catalog?q=texto
   if (req.method === 'GET' && parts[1] === 'catalog') {
     const q = clean(url.searchParams.get('q'), 80);
@@ -393,6 +399,20 @@ async function handleApi(req, res, url) {
       broadcast();
       return send(res, 200, { ok: true, ...result, resolved });
     }
+    // PUT /api/admin/info  { menu, reviewUrl }
+    if (parts[2] === 'info' && req.method === 'PUT') {
+      let body;
+      try {
+        body = JSON.parse(await readRaw(req, 300_000));
+      } catch {
+        return send(res, 400, { error: 'Datos inválidos.' });
+      }
+      const err = info.update(body || {});
+      if (err) return send(res, 400, { error: err });
+      broadcast();
+      return send(res, 200, { ok: true, ...info.public() });
+    }
+
     if (parts[2] === 'catalog' && req.method === 'DELETE') {
       catalog.clear();
       broadcast();

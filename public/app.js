@@ -172,6 +172,10 @@ function render() {
   if (!state) return;
   // limpia inscripciones propias que ya terminaron
   const active = new Set([state.nowSinging && state.nowSinging.id, ...state.queue.map((e) => e.id)]);
+  for (const m of mine) {
+    const sungEntry = state.history.find((e) => e.id === m.id);
+    if (sungEntry) justSang(sungEntry);
+  }
   const before = mine.length;
   mine = mine.filter((m) => active.has(m.id));
   if (mine.length !== before) store.set('karaoke.mine', mine);
@@ -181,6 +185,8 @@ function render() {
   renderQueue();
   renderJoinHint();
   renderSongs();
+  renderReview();
+  if (info.version !== state.infoVersion) loadInfo();
   document.title = state.nowSinging ? `🎤 ${state.nowSinging.song} · Metropolitan` : 'Metropolitan Karaoke';
 }
 
@@ -198,14 +204,14 @@ function notify(id, kind, msg) {
 // ---------- Navegación ----------
 
 function go(view) {
-  for (const v of ['queue', 'join', 'songs']) $(`#view-${v}`).hidden = v !== view;
-  document.body.dataset.view = view;
+  for (const v of ['queue', 'join', 'songs', 'menu']) $(`#view-${v}`).hidden = v !== view;
+  document.body.dataset.page = view;
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 document.addEventListener('click', async (ev) => {
-  const tab = ev.target.closest('[data-view]');
+  const tab = ev.target.closest('.tabs [data-view]');
   if (tab) return go(tab.dataset.view);
   const goBtn = ev.target.closest('[data-go]');
   if (goBtn) return go(goBtn.dataset.go);
@@ -269,6 +275,142 @@ form.addEventListener('submit', async (ev) => {
     err.textContent = e.message;
   } finally {
     btn.disabled = false;
+  }
+});
+
+
+// ---------- Carta ----------
+
+let info = { version: null, menu: { categories: [] }, reviewUrl: '' };
+let infoLoading = false;
+
+async function loadInfo() {
+  if (infoLoading) return;
+  infoLoading = true;
+  try {
+    const r = await fetch('/api/info', { cache: 'no-store' });
+    info = await r.json();
+    renderMenu();
+    renderReview();
+  } catch {
+  } finally {
+    infoLoading = false;
+  }
+}
+
+const fmtPrice = (n) => (n ? `$${Number(n).toLocaleString('es-CL')}` : '');
+
+function renderMenu() {
+  const cats = info.menu.categories.filter((c) => c.items.length);
+  $('#menu-meta').textContent = info.example ? 'Carta de ejemplo' : '';
+  $('#menu-chips').innerHTML = cats.map((c) => `<a href="#cat-${esc(c.id)}">${esc(c.name)}</a>`).join('');
+  $('#menu-chips').hidden = cats.length < 2;
+  $('#menu').innerHTML = cats.length
+    ? cats
+        .map(
+          (c) => `
+      <section class="menu-cat" id="cat-${esc(c.id)}">
+        <h3>${esc(c.name)}</h3>
+        <ul class="menu-items">
+          ${c.items
+            .map(
+              (it) => `
+            <li class="${it.available ? '' : 'sold-out'}">
+              <div class="mi-line">
+                <span class="mi-name">${esc(it.name)}</span>
+                <span class="mi-dots" aria-hidden="true"></span>
+                <span class="mi-price">${it.available ? fmtPrice(it.price) : 'Agotado'}</span>
+              </div>
+              ${it.desc ? `<p class="mi-desc">${esc(it.desc)}</p>` : ''}
+            </li>`
+            )
+            .join('')}
+        </ul>
+      </section>`
+        )
+        .join('') + (info.menu.note ? `<p class="menu-note">${esc(info.menu.note)}</p>` : '')
+    : '<p class="empty">La carta estará disponible pronto. Pregunta en la barra.</p>';
+}
+
+$('#menu-chips').addEventListener('click', (ev) => {
+  const a = ev.target.closest('a[href^="#cat-"]');
+  if (!a) return;
+  ev.preventDefault();
+  const el = document.getElementById(a.getAttribute('href').slice(1));
+  if (!el) return;
+  const offset = $('.top').offsetHeight + $('#menu-chips').offsetHeight + 8;
+  window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: 'smooth' });
+});
+
+// ---------- Reseñas en Google ----------
+// Se invita a todos por igual: Google no permite elegir a quién pedirle reseña
+// según si quedó contento o no.
+
+const REVIEW_SNOOZE_MS = 12 * 60 * 60 * 1000; // "Ahora no": no volver a preguntar esta noche
+const REVIEW_DONE_MS = 60 * 24 * 60 * 60 * 1000; // ya fue a dejarla: no insistir en 60 días
+let sang = store.get('karaoke.sang', null); // { id, name, song, at }
+let reviewState = store.get('karaoke.review', {}); // { snoozedAt, clickedAt }
+
+function justSang(entry) {
+  if (sang && sang.id === entry.id) return;
+  sang = { id: entry.id, name: entry.name, song: entry.song, at: Date.now() };
+  store.set('karaoke.sang', sang);
+}
+
+const GOOGLE_G =
+  '<svg viewBox="0 0 24 24" class="g" aria-hidden="true"><path d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z" fill="#4285F4"/><path d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" fill="#34A853"/><path d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2z" fill="#FBBC05"/><path d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6z" fill="#EA4335"/></svg>';
+
+function reviewCard(title, text, where) {
+  return `
+    <div class="stars" aria-hidden="true">★★★★★</div>
+    <p class="review-title">${title}</p>
+    <p class="muted">${text}</p>
+    <div class="review-actions">
+      <a class="btn primary" href="${esc(info.reviewUrl)}" target="_blank" rel="noopener" data-review-go>
+        <span class="g-wrap">${GOOGLE_G}</span> Dejar reseña en Google
+      </a>
+      ${where === 'prompt' ? '<button class="btn" data-review-later>Ahora no</button>' : ''}
+    </div>`;
+}
+
+function renderReview() {
+  const hasUrl = !!info.reviewUrl;
+  const now = Date.now();
+  const clickedRecently = reviewState.clickedAt && now - reviewState.clickedAt < REVIEW_DONE_MS;
+  const snoozed = reviewState.snoozedAt && now - reviewState.snoozedAt < REVIEW_SNOOZE_MS;
+  const recentSong = sang && now - sang.at < 4 * 60 * 60 * 1000;
+
+  const prompt = $('#review-prompt');
+  const showPrompt = !!(hasUrl && recentSong && !clickedRecently && !snoozed);
+  prompt.hidden = !showPrompt;
+  if (showPrompt)
+    prompt.innerHTML = reviewCard(
+      `¡Bien cantado, ${esc(sang.name)}! 👏`,
+      '¿Cómo lo estás pasando en Metropolitan? Tu opinión en Google nos ayuda muchísimo a que más gente nos conozca.',
+      'prompt'
+    );
+
+  const stat = $('#review-static');
+  stat.hidden = !hasUrl;
+  if (hasUrl)
+    stat.innerHTML = reviewCard(
+      clickedRecently ? '¡Gracias por tu reseña!' : '¿Te gustó la noche?',
+      clickedRecently
+        ? 'Si quieres actualizarla o agregar fotos, puedes volver cuando quieras.'
+        : 'Déjanos tu opinión en Google: toma menos de un minuto.',
+      'menu'
+    );
+}
+
+document.addEventListener('click', (ev) => {
+  if (ev.target.closest('[data-review-go]')) {
+    reviewState.clickedAt = Date.now();
+    store.set('karaoke.review', reviewState);
+    setTimeout(renderReview, 500);
+  } else if (ev.target.closest('[data-review-later]')) {
+    reviewState.snoozedAt = Date.now();
+    store.set('karaoke.review', reviewState);
+    renderReview();
   }
 });
 
