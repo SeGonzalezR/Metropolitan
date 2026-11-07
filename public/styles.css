@@ -56,7 +56,8 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; font-variant-numeric: lining-nums; }
+/* "lnum": cifras alineadas también en Playfair (el atajo `font:` no reinicia font-feature-settings) */
+html { -webkit-text-size-adjust: 100%; font-feature-settings: "lnum" 1; }
 body {
   margin: 0;
   background: var(--bg);
@@ -275,32 +276,12 @@ main { max-width: 560px; margin: 0 auto; padding: 0 16px; display: grid; gap: 18
 }
 .tabs .ico-pill .ico { width: 18px; height: 18px; stroke-width: 2.4; color: var(--accent-ink) !important; }
 
-/* ---------- Carta ---------- */
-.chips {
-  position: sticky; top: var(--header-h, 60px); z-index: 5; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 -16px; padding: 8px 16px; background: var(--bg);
-}
-.chips::-webkit-scrollbar { display: none; }
-.chips a {
-  flex: none; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line-strong);
-  color: var(--text); text-decoration: none; font-size: 0.85rem; white-space: nowrap;
-}
-.chips a:active { background: var(--accent-soft); border-color: var(--accent); }
-.menu-cat { padding: 6px 0 14px; }
-.menu-cat h3 {
-  margin: 0 0 10px; font: 600 0.78rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.24em;
-  color: var(--accent); display: flex; align-items: center; gap: 12px;
-}
-.menu-cat h3::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-.menu-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-.mi-line { display: flex; align-items: baseline; gap: 8px; }
-.mi-name { font: 600 1.08rem/1.25 var(--font-display); }
-.mi-dots { flex: 1; min-width: 16px; border-bottom: 1px dotted var(--line-strong); transform: translateY(-4px); }
-.mi-price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mi-desc { margin-top: 2px; font-size: 0.88rem; color: var(--muted); font-style: italic; padding-right: 64px; }
-.sold-out .mi-name { text-decoration: line-through; color: var(--muted); }
-.sold-out .mi-price { color: var(--danger); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
-.menu-note { font-size: 0.8rem; color: var(--muted); text-align: center; font-style: italic; padding: 4px 0 8px; }
+/* ---------- Carta (PDF) ---------- */
+.menu-card { text-align: center; display: grid; gap: 8px; justify-items: center; padding: 28px 18px; }
+.menu-ico { width: 52px; height: 52px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.menu-title { font: 600 1.35rem/1.25 var(--font-display); }
+.menu-card .muted { max-width: 32ch; }
+.menu-card .btn { margin-top: 8px; min-width: 200px; }
 
 /* ---------- Reseñas ---------- */
 .review { text-align: center; border-top: 3px solid var(--accent); display: grid; gap: 6px; justify-items: center; }
@@ -361,34 +342,15 @@ body.admin { padding-bottom: 32px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--muted); }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 
-/* Editor de carta (panel KJ) */
-.editor { display: grid; gap: 16px; }
-.editor[open] { padding-bottom: 0; }
-.editor summary {
-  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;
-}
-.editor summary::-webkit-details-marker { display: none; }
-.editor summary h2::before { content: '▸ '; color: var(--accent); }
-.editor[open] summary h2::before { content: '▾ '; }
-.editor summary .muted { font-size: 0.8rem; }
-.editor input {
-  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line-strong);
+/* Carta y reseñas (panel KJ) */
+#info-editor .field { gap: 8px; }
+#info-editor .field > label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.inline-form { display: flex; gap: 8px; }
+.inline-form input {
+  flex: 1; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line-strong);
   background: var(--bg); color: var(--text); font-size: 16px; font-family: var(--font-body);
 }
-.editor input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
-.ed-cat { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin: 0 0 12px; display: grid; gap: 10px; }
-.ed-cat-head { display: flex; gap: 8px; align-items: center; }
-.ed-cat-name { font: 600 1.05rem var(--font-display) !important; color: var(--accent) !important; }
-.ed-item { display: grid; gap: 6px; padding: 10px 0; border-top: 1px dashed var(--line); }
-.ed-item.off input { opacity: 0.55; text-decoration: line-through; }
-.ed-row { display: grid; grid-template-columns: 1fr 96px; gap: 6px; }
-.ed-price { text-align: right; font-variant-numeric: tabular-nums; }
-.ed-cat > .btn { justify-self: start; }
-.save-bar {
-  position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  margin: 0 -18px; padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
-  background: var(--surface); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius);
-}
-.save-bar #dirty { color: var(--warn); }
+.inline-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+
 body[data-page='menu'] #now,
 body[data-page='menu'] #review-prompt { display: none; }

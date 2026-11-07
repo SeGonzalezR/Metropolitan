@@ -33,6 +33,10 @@ function fmtClock(ms) {
   return new Date(ms).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
+function fmtSize(bytes) {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function fmtElapsed(seconds) {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -101,14 +105,4 @@ function connectLive(onState) {
         localStorage.setItem('karaoke.theme', next); // texto plano: lo lee el script del <head>
       } catch {}
     });
-})();
-
-// Altura real del encabezado (para pegar barras justo debajo).
-(function trackHeader() {
-  const header = document.querySelector('.top');
-  if (!header) return;
-  const set = () => document.documentElement.style.setProperty('--header-h', `${header.offsetHeight}px`);
-  set();
-  if ('ResizeObserver' in window) new ResizeObserver(set).observe(header);
-  else window.addEventListener('resize', set);
 })();

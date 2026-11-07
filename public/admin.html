@@ -87,30 +87,30 @@
         <p class="muted small" id="catalog-result"></p>
       </section>
 
-      <details class="card editor" id="info-editor">
-        <summary><h2>Carta y reseñas</h2><span class="muted" id="info-status"></span></summary>
+      <section class="view card" id="info-editor">
+        <div class="view-head"><h2>Carta y reseñas</h2></div>
 
-        <div class="form">
-          <div class="field">
-            <label for="review-url">Enlace para dejar reseña en Google</label>
+        <div class="field">
+          <label>Carta (PDF)</label>
+          <p class="muted small" id="pdf-status">Sin carta cargada.</p>
+          <div class="actions">
+            <label class="btn small primary" for="pdf-file">Subir PDF</label>
+            <input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden />
+            <a class="btn small" id="pdf-view" target="_blank" rel="noopener" hidden>Ver</a>
+            <button type="button" class="btn small danger-text" id="pdf-remove" hidden>Quitar</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="review-url">Enlace para dejar reseña en Google</label>
+          <div class="inline-form">
             <input id="review-url" type="url" inputmode="url" placeholder="https://g.page/r/…/review" />
-            <p class="field-note">En tu Perfil de Empresa de Google: <em>Pedir reseñas</em> › copia el enlace.
-              Si lo dejas vacío, no se muestra el botón de reseñas.</p>
+            <button type="button" class="btn small primary" id="save-review">Guardar</button>
           </div>
-          <div class="field">
-            <label for="menu-note">Nota al pie de la carta</label>
-            <input id="menu-note" maxlength="200" placeholder="Ej: Precios con IVA incluido" />
-          </div>
+          <p class="field-note">En tu Perfil de Empresa de Google: <em>Pedir reseñas</em> › copia el enlace.
+            Si lo dejas vacío, no se muestra el botón de reseñas.</p>
         </div>
-
-        <div id="menu-editor"></div>
-        <button class="btn" type="button" id="add-cat">＋ Agregar categoría</button>
-
-        <div class="save-bar">
-          <span class="muted small" id="dirty"></span>
-          <button class="btn primary" type="button" id="save-info">Guardar carta</button>
-        </div>
-      </details>
+      </section>
 
       <div class="toolbar">
         <button class="btn danger-text" id="reset">Reiniciar noche (borra todo)</button>

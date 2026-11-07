@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Catalog } = require('./catalog');
-const { Info } = require('./info');
+const { Info, MAX_PDF_BYTES } = require('./info');
 
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PIN = process.env.ADMIN_PIN || '1234';
@@ -34,7 +34,7 @@ function loadDb() {
 
 let db = loadDb();
 const catalog = new Catalog(CATALOG_FILE);
-const info = new Info(process.env.INFO_FILE || path.join(path.dirname(DATA_FILE), 'info.json'));
+const info = new Info(path.dirname(DATA_FILE));
 let saveTimer = null;
 
 function save() {
@@ -130,7 +130,7 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function readRaw(req, limit) {
+function readRaw(req, limit, asBuffer = false) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
@@ -143,7 +143,10 @@ function readRaw(req, limit) {
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      resolve(asBuffer ? buf : buf.toString('utf8'));
+    });
     req.on('error', reject);
   });
 }
@@ -399,16 +402,35 @@ async function handleApi(req, res, url) {
       broadcast();
       return send(res, 200, { ok: true, ...result, resolved });
     }
-    // PUT /api/admin/info  { menu, reviewUrl }
-    if (parts[2] === 'info' && req.method === 'PUT') {
+    // PUT /api/admin/review-url  { reviewUrl }
+    if (parts[2] === 'review-url' && req.method === 'PUT') {
       let body;
       try {
-        body = JSON.parse(await readRaw(req, 300_000));
+        body = await readBody(req);
       } catch {
         return send(res, 400, { error: 'Datos inválidos.' });
       }
-      const err = info.update(body || {});
+      const err = info.setReviewUrl(body.reviewUrl);
       if (err) return send(res, 400, { error: err });
+      broadcast();
+      return send(res, 200, { ok: true, ...info.public() });
+    }
+
+    // POST /api/admin/menu-pdf  (cuerpo: el PDF tal cual)  ·  DELETE para quitarlo
+    if (parts[2] === 'menu-pdf' && req.method === 'POST') {
+      let buf;
+      try {
+        buf = await readRaw(req, MAX_PDF_BYTES + 1, true);
+      } catch {
+        return send(res, 413, { error: 'El PDF es demasiado grande (máx. 25 MB).' });
+      }
+      const err = info.setPdf(buf);
+      if (err) return send(res, 400, { error: err });
+      broadcast();
+      return send(res, 200, { ok: true, ...info.public() });
+    }
+    if (parts[2] === 'menu-pdf' && req.method === 'DELETE') {
+      info.removePdf();
       broadcast();
       return send(res, 200, { ok: true, ...info.public() });
     }
@@ -450,6 +472,15 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'Método no permitido.' });
+  if (url.pathname === '/carta.pdf') {
+    if (!info.menuPdf) return send(res, 404, { error: 'Aún no hay carta.' });
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="Carta-Metropolitan.pdf"',
+      'Cache-Control': 'public, max-age=300',
+    });
+    return fs.createReadStream(info.pdfFile).pipe(res);
+  }
   serveStatic(req, res, decodeURIComponent(url.pathname));
 });
 

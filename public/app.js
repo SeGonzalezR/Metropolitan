@@ -165,7 +165,7 @@ function renderSongs() {
       </li>`
         )
         .join('')
-    : `<li class="empty">${term ? 'Sin resultados.' : 'Aún no se ha pedido ninguna canción.'}</li>`;
+    : `<li class="empty">${term ? 'Nadie la ha pedido esta noche.' : 'Aún no se ha pedido ninguna canción.'}</li>`;
 }
 
 function render() {
@@ -279,9 +279,9 @@ form.addEventListener('submit', async (ev) => {
 });
 
 
-// ---------- Carta ----------
+// ---------- Carta (PDF) ----------
 
-let info = { version: null, menu: { categories: [] }, reviewUrl: '' };
+let info = { version: null, reviewUrl: '', menuPdf: null };
 let infoLoading = false;
 
 async function loadInfo() {
@@ -298,49 +298,17 @@ async function loadInfo() {
   }
 }
 
-const fmtPrice = (n) => (n ? `$${Number(n).toLocaleString('es-CL')}` : '');
-
 function renderMenu() {
-  const cats = info.menu.categories.filter((c) => c.items.length);
-  $('#menu-meta').textContent = info.example ? 'Carta de ejemplo' : '';
-  $('#menu-chips').innerHTML = cats.map((c) => `<a href="#cat-${esc(c.id)}">${esc(c.name)}</a>`).join('');
-  $('#menu-chips').hidden = cats.length < 2;
-  $('#menu').innerHTML = cats.length
-    ? cats
-        .map(
-          (c) => `
-      <section class="menu-cat" id="cat-${esc(c.id)}">
-        <h3>${esc(c.name)}</h3>
-        <ul class="menu-items">
-          ${c.items
-            .map(
-              (it) => `
-            <li class="${it.available ? '' : 'sold-out'}">
-              <div class="mi-line">
-                <span class="mi-name">${esc(it.name)}</span>
-                <span class="mi-dots" aria-hidden="true"></span>
-                <span class="mi-price">${it.available ? fmtPrice(it.price) : 'Agotado'}</span>
-              </div>
-              ${it.desc ? `<p class="mi-desc">${esc(it.desc)}</p>` : ''}
-            </li>`
-            )
-            .join('')}
-        </ul>
-      </section>`
-        )
-        .join('') + (info.menu.note ? `<p class="menu-note">${esc(info.menu.note)}</p>` : '')
-    : '<p class="empty">La carta estará disponible pronto. Pregunta en la barra.</p>';
+  const pdf = info.menuPdf;
+  $('#menu').innerHTML = pdf
+    ? `
+      <svg class="menu-ico" viewBox="0 0 48 48" aria-hidden="true"><path d="M12 6h18l8 8v28H12z"/><path d="M30 6v8h8M18 22h12M18 28h12M18 34h8"/></svg>
+      <p class="menu-title">Nuestra carta</p>
+      <p class="muted">Cócteles, cervezas y algo para picar mientras esperas tu turno.</p>
+      <a class="btn primary" href="${esc(pdf.url)}" target="_blank" rel="noopener">Ver la carta</a>
+      <p class="muted small">PDF · ${fmtSize(pdf.size)} · actualizada el ${new Date(pdf.updatedAt).toLocaleDateString('es-CL')}</p>`
+    : `<p class="menu-title">La carta estará disponible pronto</p><p class="muted">Mientras tanto, pregunta en la barra 🍸</p>`;
 }
-
-$('#menu-chips').addEventListener('click', (ev) => {
-  const a = ev.target.closest('a[href^="#cat-"]');
-  if (!a) return;
-  ev.preventDefault();
-  const el = document.getElementById(a.getAttribute('href').slice(1));
-  if (!el) return;
-  const offset = $('.top').offsetHeight + $('#menu-chips').offsetHeight + 8;
-  window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset, behavior: 'smooth' });
-});
 
 // ---------- Reseñas en Google ----------
 // Se invita a todos por igual: Google no permite elegir a quién pedirle reseña
